@@ -1,0 +1,21 @@
+{
+    "tts": {
+        "languages": {
+            "fin": {
+                "model_path": "E:\\Code\\vits\\fin"
+            }
+        },
+        "venv": "E:\\Code\\ExtCordTTSServer\\tts_venv"
+    },
+    "asr": {
+        "languages": [
+            "fin"
+        ],
+        "venv": "E:\\Code\\ExtCordTTSServer\\asr_venv"
+    },
+    "phonetics": {
+        "languages": [
+            "fin"
+        ]
+    }
+}

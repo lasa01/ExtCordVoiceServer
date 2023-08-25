@@ -1,0 +1,3 @@
+PyOgg @ git+https://github.com/TeamPyOgg/PyOgg@6871a4f234e8a3a346c4874a12509bfa02c4c63a
+-r vits/requirements.txt
+num2words==0.5.12

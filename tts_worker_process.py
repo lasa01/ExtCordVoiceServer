@@ -5,34 +5,21 @@ import sys
 import os
 
 
-def process(pipe: Connection, model_dir: str):
-    print(f"Starting TTS worker process...")
+def process(pipe: Connection, language: str, model_dir: str, venv: str):
+    print(f"{language} Starting TTS worker process...")
 
+    sys.path.append(venv)
+    sys.path.append(os.path.join(venv, "Lib", "site-packages"))
     sys.path.append(os.path.join(os.path.dirname(__file__), "vits"))
 
-    import re
-    import glob
-    import json
-    import tempfile
-    import math
     import torch
-    from torch import nn
-    from torch.nn import functional as F
-    from torch.utils.data import DataLoader
-    import numpy as np
     from vits import commons
     from vits import utils
-    import argparse
-    import subprocess
-    from vits.data_utils import (
-        TextAudioLoader,
-        TextAudioCollate,
-        TextAudioSpeakerLoader,
-        TextAudioSpeakerCollate,
-    )
     from vits.models import SynthesizerTrn
-    from scipy.io.wavfile import write
     from io import BytesIO
+    import numpy as np
+    import pyogg
+    from num2words import num2words
 
     class TextMapper(object):
         def __init__(self, vocab_file):
@@ -87,8 +74,19 @@ def process(pipe: Connection, model_dir: str):
             text = self.preprocess_char(text, lang=lang)
             val_chars = self._symbol_to_id
             txt_filt = "".join(list(filter(lambda x: x in val_chars, text)))
-            print(f"text after filtering OOV: {txt_filt}")
+            # print(f"{language} Text after filtering OOV: {txt_filt}")
             return txt_filt
+
+        def process_numbers(self, text: str, lang=None):
+            if lang == None:
+                return text
+
+            words = text.split()
+
+            return " ".join(
+                num2words(word, lang=lang) if word.isdecimal() else word
+                for word in words
+            )
 
         def preprocess_char(self, text, lang=None):
             """
@@ -96,14 +94,14 @@ def process(pipe: Connection, model_dir: str):
             """
             if lang == "ron":
                 text = text.replace("ț", "ţ")
-                print(f"{lang} (ț -> ţ): {text}")
+                # print(f"{lang} (ț -> ţ): {text}")
             return text
 
     ckpt_dir = model_dir
 
     device = torch.device("cpu")
 
-    print(f"Run inference with {device}")
+    print(f"{language} Run inference with {device}")
     vocab_file = f"{ckpt_dir}/vocab.txt"
     config_file = f"{ckpt_dir}/config.json"
     assert os.path.isfile(config_file), f"{config_file} doesn't exist"
@@ -119,9 +117,11 @@ def process(pipe: Connection, model_dir: str):
     _ = net_g.eval()
 
     g_pth = f"{ckpt_dir}/G_100000.pth"
-    print(f"load {g_pth}")
+    print(f"{language} Load {g_pth}")
 
     _ = utils.load_checkpoint(g_pth, net_g, None)
+
+    print(f"{language} Waiting for requests")
 
     while True:
         req: TtsRequest = pipe.recv()
@@ -131,7 +131,7 @@ def process(pipe: Connection, model_dir: str):
 
         txt = req.text
 
-        print(f"text: {txt}")
+        # print(f"{language} Text: {txt}")
 
         # is_uroman = hps.data.training_files.split(".")[-1] == "uroman"
         # if is_uroman:
@@ -147,7 +147,8 @@ def process(pipe: Connection, model_dir: str):
         #         print(f"uroman text: {txt}")
 
         txt = txt.lower()
-        txt = text_mapper.filter_oov(txt, lang=req.language)
+        txt = text_mapper.process_numbers(txt, lang=language)
+        txt = text_mapper.filter_oov(txt, lang=language)
         stn_tst = text_mapper.get_text(txt, hps)
         with torch.no_grad():
             x_tst = stn_tst.unsqueeze(0).to(device)
@@ -167,10 +168,24 @@ def process(pipe: Connection, model_dir: str):
 
         buffer = BytesIO()
 
-        write(buffer, hps.data.sampling_rate, hyp)
+        encoder = pyogg.OpusBufferedEncoder()
+        encoder.set_application("audio")
+        encoder.set_sampling_frequency(hps.data.sampling_rate)
+        encoder.set_channels(1)
+        encoder.set_frame_size(20)  # milliseconds
+
+        writer = pyogg.OggOpusWriter(buffer, encoder)
+
+        i = np.iinfo(np.int16)
+        abs_max = 2 ** (i.bits - 1)
+        offset = i.min + abs_max
+        pcm16 = (hyp.ravel() * abs_max + offset).clip(i.min, i.max).astype(np.int16)
+
+        writer.write(pcm16.view("b").data)
+        writer.close()
 
         resp = TtsResponse(txt, buffer.getvalue())
 
         pipe.send(resp)
 
-        print(f"response sent")
+        # print(f"{language} Response sent")

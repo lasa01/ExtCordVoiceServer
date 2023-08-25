@@ -1,3 +1,5 @@
 venv
+tts_venv
+asr_venv
 __pycache__/
 *.py[cod]

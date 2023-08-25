@@ -1,0 +1,4 @@
+PyOgg @ git+https://github.com/TeamPyOgg/PyOgg@6871a4f234e8a3a346c4874a12509bfa02c4c63a
+transformers @ git+https://github.com/huggingface/transformers@b28ebb265590ff12bb888b3ca5e07d56922beb6a
+torch==1.13.1
+torchaudio==0.13.1
