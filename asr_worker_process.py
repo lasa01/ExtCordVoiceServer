@@ -59,6 +59,7 @@ def process(pipe: Connection, language: str, venv: str):
 
     sys.path.append(venv)
     sys.path.append(os.path.join(venv, "Lib", "site-packages"))
+    sys.path.append(os.path.join(venv, "lib", "python3.8", "site-packages"))
 
     from transformers import Wav2Vec2ForCTC, AutoProcessor
     import torch

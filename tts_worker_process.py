@@ -10,6 +10,7 @@ def process(pipe: Connection, language: str, model_dir: str, venv: str):
 
     sys.path.append(venv)
     sys.path.append(os.path.join(venv, "Lib", "site-packages"))
+    sys.path.append(os.path.join(venv, "lib", "python3.8", "site-packages"))
     sys.path.append(os.path.join(os.path.dirname(__file__), "vits"))
 
     import torch
