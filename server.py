@@ -25,6 +25,17 @@ RESPONSE_CONTENT_TYPE = "audio/ogg"
 RESPONSE_FILENAME = "result.ogg"
 
 
+class TokenCheckMiddleware:
+    def __init__(self, token: str):
+        self.token = token
+
+    async def process_request(self, req: falcon.asgi.Request, resp: falcon.asgi.Response):
+        token = req.get_header("Authorization", required=True)
+
+        if token != self.token:
+            raise falcon.HTTPUnauthorized()
+
+
 class TtsProcessor:
     def __init__(self, language: str, model_dir: str, venv: str):
         self.language = language
@@ -178,6 +189,7 @@ cfg = load_config_from_file(CONFIG_FILENAME)
 save_config_to_file(CONFIG_FILENAME, cfg)
 
 app = falcon.asgi.App()
+app.add_middleware(TokenCheckMiddleware(cfg.token))
 app.add_route("/tts/{language}", TtsResource(cfg.tts))
 app.add_route("/asr/{language}", AsrResource(cfg.asr))
 app.add_route("/phonetics/{language}", PhoneticsResource(cfg.phonetics))

@@ -32,6 +32,7 @@ class Config:
     tts: TtsConfig = TtsConfig()
     asr: AsrConfig = AsrConfig()
     phonetics: PhoneticsConfig = PhoneticsConfig()
+    token: str = ""
 
 
 ConfigValidator = TypeAdapter(Config)
