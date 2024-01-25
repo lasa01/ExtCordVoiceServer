@@ -5,9 +5,8 @@ from typing import List, Optional
 import sys
 import os
 import traceback
+import re
 
-
-MODEL_ID = "facebook/mms-1b-fl102"
 
 MAX_PACKET_COUNT = 1024
 MAX_PACKET_SIZE = 7664
@@ -54,24 +53,29 @@ def decode_extcord_packets(data: bytes) -> Optional[List[bytes]]:
     return packets
 
 
-def process(pipe: Connection, language: str, venv: str):
+def process(
+    pipe: Connection,
+    language: str,
+    model_dir_or_id: str,
+    accurate_model_dir_or_id: str,
+    venv: str,
+):
     print(f"{language} Starting ASR worker process...")
 
     sys.path.append(venv)
     sys.path.append(os.path.join(venv, "Lib", "site-packages"))
     sys.path.append(os.path.join(venv, "lib", "python3.8", "site-packages"))
 
-    from transformers import Wav2Vec2ForCTC, AutoProcessor
-    import torch
+    from faster_whisper import WhisperModel
     import pyogg
     import numpy as np
     from fonetika.soundex import FinnishSoundex, EnglishSoundex
 
     # from fonetika.distance import PhoneticsInnerLanguageDistance
 
-    processor = AutoProcessor.from_pretrained(MODEL_ID, target_lang=language)
-    model = Wav2Vec2ForCTC.from_pretrained(
-        MODEL_ID, target_lang=language, ignore_mismatched_sizes=True
+    model = WhisperModel(model_dir_or_id, device="cpu", compute_type="int8")
+    accurate_model = WhisperModel(
+        accurate_model_dir_or_id, device="cpu", compute_type="int8"
     )
 
     print(f"{language} Waiting for ASR requests")
@@ -126,13 +130,17 @@ def process(pipe: Connection, language: str, venv: str):
             np.frombuffer(pcm_output, dtype=np.int16).astype(np.float32) - offset
         ) / abs_max
 
-        inputs = processor(pcm_float, sampling_rate=16000, return_tensors="pt")
+        if req.accurate:
+            segments, info = accurate_model.transcribe(
+                pcm_float, beam_size=1, language=language[:2]
+            )
+        else:
+            segments, info = model.transcribe(
+                pcm_float, beam_size=1, language=language[:2]
+            )
 
-        with torch.no_grad():
-            outputs = model(**inputs).logits
-
-        ids = torch.argmax(outputs, dim=-1)[0]
-        transcription: str = processor.decode(ids)
+        transcription = " ".join(segment.text for segment in segments)
+        transcription = re.sub("[^\\w ]", "", transcription)
         transcription = transcription.strip()
 
         # print(f"{language} Transcription: {transcription}")

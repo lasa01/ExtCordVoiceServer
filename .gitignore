@@ -4,3 +4,4 @@ asr_venv
 __pycache__/
 *.py[cod]
 config.json
+models

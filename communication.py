@@ -15,7 +15,7 @@ class TtsResponse:
 @dataclass
 class AsrRequest:
     opus_packets: bytes
-    # keyword: str
+    accurate: bool
 
 
 @dataclass

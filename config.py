@@ -17,8 +17,14 @@ class TtsConfig:
 
 
 @dataclass
+class AsrLanguageConfig:
+    model_path: str
+    accurate_model_path: str
+
+
+@dataclass
 class AsrConfig:
-    languages: List[str] = field(default_factory=list)
+    languages: Dict[str, AsrLanguageConfig] = field(default_factory=dict)
     venv: str = ""
 
 

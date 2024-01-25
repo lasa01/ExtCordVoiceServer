@@ -29,7 +29,9 @@ class TokenCheckMiddleware:
     def __init__(self, token: str):
         self.token = token
 
-    async def process_request(self, req: falcon.asgi.Request, resp: falcon.asgi.Response):
+    async def process_request(
+        self, req: falcon.asgi.Request, resp: falcon.asgi.Response
+    ):
         token = req.get_header("Authorization", required=True)
 
         if token != self.token:
@@ -90,13 +92,16 @@ class TtsResource:
 
 
 class AsrProcessor:
-    def __init__(self, language: str, venv: str):
+    def __init__(
+        self, language: str, model_dir_or_id: str, accurate_model_dir_or_id, venv: str
+    ):
         self.language = language
 
         (conn1, conn2) = AioPipe()
 
         self.process = AioProcess(
-            target=asr_worker_process.process, args=(conn2, language, venv)
+            target=asr_worker_process.process,
+            args=(conn2, language, model_dir_or_id, accurate_model_dir_or_id, venv),
         )
         self.connection = conn1
 
@@ -124,14 +129,21 @@ class AsrResource:
     def __init__(self, config: AsrConfig):
         self.languages = {}
 
-        for language in config.languages:
-            self.languages[language] = AsrProcessor(language, config.venv)
+        for language, language_config in config.languages.items():
+            self.languages[language] = AsrProcessor(
+                language,
+                language_config.model_path,
+                language_config.accurate_model_path,
+                config.venv,
+            )
 
     async def on_post(
         self, req: falcon.asgi.Request, resp: falcon.asgi.Response, language: str
     ):
         if language not in self.languages:
             raise falcon.HTTPInvalidParam("language not found", "language")
+
+        accurate = req.get_param_as_bool("accurate", required=False, default=False)
 
         processor = self.languages[language]
 
@@ -146,7 +158,7 @@ class AsrResource:
         if len(audio_data) == self.max_audio_size:
             raise falcon.HTTPPayloadTooLarge()
 
-        request = AsrRequest(audio_data)
+        request = AsrRequest(audio_data, accurate)
 
         resp.content_type = "application/json"
         resp.text = await processor.process_request(request)
